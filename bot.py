@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bot Telegram quản lý AmneziaWG — dashboard, tạo/gia hạn/khoá khách, nhắc hạn."""
 import os, time, html, logging, asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, WebAppInfo
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                           MessageHandler, filters, ContextTypes)
 import awg, db
@@ -14,9 +14,8 @@ ADMIN_ID = int(os.environ.get("ADMIN_ID", "330613623"))
 BOT_PASS = os.environ.get("BOT_PASS", "")
 NODE = os.environ.get("NODE_NAME", "eaz2")
 ENDPOINT = os.environ.get("AWG_ENDPOINT_DOMAIN", "eaz2.hoichamvn.uk")
+PANEL_URL = os.environ.get("PANEL_URL", "")  # https://panel.hoichamvn.uk cho nút Mini App
 
-# giá mặc định (₽) — sửa bằng lệnh /gia hoặc ở đây
-PLAN_PRICES = {1: 0, 3: 0, 6: 0, 12: 0}
 PLAN_LABELS = {1: "1 tháng", 3: "3 tháng", 6: "6 tháng", 12: "12 tháng"}
 
 authed = set()  # chat_id đã nhập đúng mật khẩu phiên này
@@ -85,7 +84,7 @@ async def show_dashboard(update, context, edit=False):
          InlineKeyboardButton("💰 Doanh thu", callback_data="revenue")],
         [InlineKeyboardButton("👥 Danh sách", callback_data="list:0"),
          InlineKeyboardButton("💾 Sao lưu", callback_data="backup")],
-    ])
+    ] + ([[InlineKeyboardButton("📱 Mở Mini App", web_app=WebAppInfo(url=PANEL_URL))]] if PANEL_URL.startswith("https://") else []))
     text = head + body
     if edit and update.callback_query:
         await update.callback_query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
@@ -169,7 +168,7 @@ async def ask_new_name(update, context):
 
 async def ask_plan(update, context, name):
     context.user_data["new_name"] = name
-    rows = [[InlineKeyboardButton(f"{PLAN_LABELS[m]} — {PLAN_PRICES[m]}₽", callback_data=f"mk:{m}")]
+    rows = [[InlineKeyboardButton(f"{PLAN_LABELS[m]} — {db.get_price(m)}₽", callback_data=f"mk:{m}")]
             for m in (1, 3, 6, 12)]
     rows.append([InlineKeyboardButton("🎁 Dùng thử 3 ngày", callback_data="mk:trial")])
     rows.append([InlineKeyboardButton("⬅️ Huỷ", callback_data="home")])
@@ -189,7 +188,7 @@ async def do_create(update, context, plan):
     if plan == "trial":
         exp = db.add(name, 0, 0, NODE, trial_days=3)
     else:
-        m = int(plan); exp = db.add(name, m, PLAN_PRICES[m], NODE)
+        m = int(plan); exp = db.add(name, m, db.get_price(m), NODE)
     await update.callback_query.edit_message_text(
         f"✅ Đã tạo <b>{html.escape(name)}</b>\nHết hạn {fdate(exp)} · {fdays(exp)}",
         parse_mode="HTML")
@@ -296,7 +295,7 @@ async def on_cb(update, context):
             await send_config(update, context, d.split(":", 1)[1])
         elif d.startswith("ext:"):
             _, name, m = d.split(":"); m = int(m)
-            exp = db.extend(name, m, PLAN_PRICES.get(m, 0))
+            exp = db.extend(name, m, db.get_price(m))
             c = db.get(name)
             if c and c["locked"]:
                 db.set_locked(name, 0)

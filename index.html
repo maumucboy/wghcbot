@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>HoiCham VPN</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#17212b;--card:#1d2a39;--card2:#223447;--txt:#eaf1f8;--sub:#7f93a6;--line:#26384a;
+  --accent:#4ea4e6;--green:#4bb34b;--red:#e2574c;--yellow:#e8b53a;--grey:#5a6b7d;--pill:#243648}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',system-ui,-apple-system,Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--txt);min-height:100vh;padding-bottom:64px}
+.wrap{padding:12px 12px 0;max-width:520px;margin:0 auto}
+.hide{display:none!important}
+.node{background:linear-gradient(135deg,#1f3346,#1a2a3a);border-radius:16px;padding:13px 15px;margin-bottom:12px;border:1px solid #2a4258}
+.node .nm{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px}
+.node .ip{color:var(--sub);font-size:11px;margin-top:2px}
+.bars{display:flex;gap:16px;margin-top:11px}.bar{flex:1}
+.bar .lb{color:var(--sub);font-size:10px;margin-bottom:4px;display:flex;justify-content:space-between}
+.bar .tr{height:6px;background:#122030;border-radius:4px;overflow:hidden}.bar .fl{height:100%;border-radius:4px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:13px}
+.tile{background:var(--card);border-radius:13px;padding:11px 13px;border:1px solid #223447}
+.tile .v{font-size:20px;font-weight:700}.tile .k{color:var(--sub);font-size:11px;margin-top:1px}
+.v.g{color:var(--green)}.v.y{color:var(--yellow)}.v.a{color:var(--accent)}
+.srch{width:100%;background:#14202c;border:1px solid #26384a;border-radius:11px;padding:9px 12px;color:var(--txt);font-size:13px;margin-bottom:9px}
+.chips{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.chip{background:var(--pill);border:1px solid #2c4256;border-radius:16px;padding:5px 12px;color:#b9cada;font-size:11.5px;cursor:pointer}
+.chip.on{background:var(--accent);color:#06202f;border-color:var(--accent);font-weight:600}
+.clist{display:flex;flex-direction:column;gap:7px}
+.crow{background:var(--card);border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:11px;border:1px solid #1f3042;cursor:pointer}
+.st{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.cmain{flex:1;min-width:0}.cn{font-size:13px;font-weight:600}.cm{color:var(--sub);font-size:11px;margin-top:1px}
+.cr{text-align:right}.cd{font-size:11.5px}.cd.g{color:var(--green)}.cd.r{color:var(--red)}.cd.y{color:var(--yellow)}.cd.gr{color:var(--grey)}
+.ct{color:var(--sub);font-size:10px;margin-top:1px}
+.dhead{display:flex;align-items:center;gap:12px;margin:4px 0 14px}
+.dav{width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,#2e5f87,#4ea4e6);display:flex;align-items:center;justify-content:center;font-size:22px}
+.dname{font-size:17px;font-weight:700}.donline{font-size:12px;margin-top:2px}
+.kv{background:var(--card);border-radius:12px;padding:4px 14px;margin-bottom:12px}
+.kvr{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #22323f;font-size:12.5px;gap:10px}
+.kvr:last-child{border-bottom:none}.kvr .k{color:var(--sub);white-space:nowrap}.kvr .vv{text-align:right;word-break:break-all}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.btn{border-radius:12px;padding:12px 0;text-align:center;font-size:13px;font-weight:600;cursor:pointer;border:none}
+.btn.p{background:var(--accent);color:#06202f}.btn.s{background:var(--card2);color:#cfe3f3;border:1px solid #2c4256}
+.btn.d{background:#3a2026;color:#ff8a80;border:1px solid #5a2a30}.btn.full{grid-column:1/3}
+.lab{color:var(--sub);font-size:11px;margin:12px 2px 5px}
+.inp{width:100%;background:#14202c;border:1px solid #26384a;border-radius:11px;padding:12px 14px;color:#fff;font-size:14px}
+.plans{display:flex;flex-direction:column;gap:9px;margin-top:4px}
+.plan{background:var(--card);border:1px solid #26384a;border-radius:13px;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.plan.sel{border-color:var(--accent);background:linear-gradient(135deg,#1c3347,#1d2a39)}
+.plan .pn{font-size:14px;font-weight:600}.plan .pp{color:var(--sub);font-size:11px;margin-top:2px}.plan .pv{color:var(--accent);font-size:15px;font-weight:700}
+.big{font-size:26px;font-weight:800}.bigk{color:var(--sub);font-size:12px;margin-bottom:2px}
+.rev{display:flex;align-items:flex-end;gap:7px;height:90px;margin:6px 0 14px}
+.rev .col{flex:1;background:linear-gradient(#4ea4e6,#2e6a98);border-radius:5px 5px 0 0;min-height:4px}
+.nav{position:fixed;bottom:0;left:0;right:0;display:flex;border-top:1px solid #1c2a38;background:#1a2634;max-width:520px;margin:0 auto}
+.nav div{flex:1;text-align:center;padding:8px 0 10px;color:var(--sub);font-size:10px;cursor:pointer}
+.nav div.on{color:var(--accent)}.nav .ic{font-size:17px;display:block;margin-bottom:2px}
+.spin{text-align:center;color:var(--sub);padding:40px 0}
+.toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);background:#2a3b4d;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;z-index:9;opacity:0;transition:.2s}
+.toast.show{opacity:1}
+.back{color:var(--accent);font-size:13px;margin-bottom:8px;display:inline-block;cursor:pointer}
+</style></head>
+<body>
+<div class="wrap" id="app"><div class="spin">Đang tải…</div></div>
+<div class="nav" id="nav">
+  <div data-tab="home" class="on"><span class="ic">🏠</span>Khách</div>
+  <div data-tab="create"><span class="ic">➕</span>Tạo</div>
+  <div data-tab="revenue"><span class="ic">💰</span>Doanh thu</div>
+  <div data-tab="settings"><span class="ic">⚙️</span>Cài</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const tg = window.Telegram.WebApp; tg.ready(); tg.expand();
+const INIT = tg.initData || "";
+const app = document.getElementById("app");
+let DATA = null, FILTER = "all", Q = "", SEL = null;
+
+function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),1800);}
+async function api(path, opts={}){
+  opts.headers = Object.assign({"X-Init-Data":INIT,"Content-Type":"application/json"}, opts.headers||{});
+  const r = await fetch(path, opts);
+  if(!r.ok){let e="lỗi";try{e=(await r.json()).detail||e}catch{}throw new Error(e);}
+  const ct=r.headers.get("content-type")||"";return ct.includes("json")?r.json():r.text();
+}
+function esc(s){return (s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function fsize(n){const u=["B","K","M","G","T"];let i=0;while(n>=1024&&i<4){n/=1024;i++}return i?n.toFixed(1)+u[i]:n+"B";}
+function fdate(ts){const d=new Date(ts*1000);return String(d.getDate()).padStart(2,"0")+"."+String(d.getMonth()+1).padStart(2,"0")+"."+d.getFullYear();}
+function fdays(c){if(c.no_expiry)return["chưa đặt","gr"];const d=c.days;if(d<0)return["hết "+(-d)+"n","r"];if(d===0)return["hết hôm nay","y"];if(d<=3)return[d+" ngày","r"];if(d<=7)return[d+" ngày","y"];return[d+" ngày","g"];}
+function dotColor(c){if(c.locked)return"var(--grey)";if(!c.no_expiry&&c.days<0)return"var(--yellow)";return c.online?"var(--green)":"var(--red)";}
+
+function setTab(t){document.querySelectorAll("#nav div").forEach(d=>d.classList.toggle("on",d.dataset.tab===t));}
+
+async function load(){try{DATA=await api("/api/dashboard");renderHome();}catch(e){app.innerHTML='<div class="spin">⚠️ '+esc(e.message)+'<br><br>Mở từ trong Telegram (nút Mini App).</div>';}}
+
+function renderHome(){
+  setTab("home");SEL=null;
+  const n=DATA.node;
+  let cs=DATA.clients.filter(c=>{
+    if(FILTER==="online"&&!(c.online&&!c.locked))return false;
+    if(FILTER==="exp"&&!(!c.no_expiry&&c.days<=7&&!c.locked))return false;
+    if(FILTER==="locked"&&!c.locked)return false;
+    if(Q&&!c.name.toLowerCase().includes(Q.toLowerCase()))return false;
+    return true;});
+  app.innerHTML=`
+  <div class="node"><div class="nm">🟢 ${esc(n.name)} <span style="font-weight:400;color:#8fa6ba;font-size:11px">· AWG 2.0</span></div>
+   <div class="ip">${esc(n.endpoint)} · :${n.port}</div>
+   <div class="bars">
+    <div class="bar"><div class="lb"><span>CPU</span><span>${n.cpu}%</span></div><div class="tr"><div class="fl" style="width:${n.cpu}%;background:var(--green)"></div></div></div>
+    <div class="bar"><div class="lb"><span>RAM</span><span>${n.ram}%</span></div><div class="tr"><div class="fl" style="width:${n.ram}%;background:var(--accent)"></div></div></div>
+    <div class="bar"><div class="lb"><span>Online</span><span>${DATA.online}/${DATA.total}</span></div><div class="tr"><div class="fl" style="width:${DATA.total?Math.round(100*DATA.online/DATA.total):0}%;background:var(--yellow)"></div></div></div>
+   </div></div>
+  <div class="tiles">
+   <div class="tile"><div class="v">${DATA.total}</div><div class="k">Tổng khách</div></div>
+   <div class="tile"><div class="v g">${DATA.online}</div><div class="k">Đang online</div></div>
+   <div class="tile"><div class="v y">${DATA.expiring}</div><div class="k">Sắp hết hạn</div></div>
+   <div class="tile"><div class="v a">${DATA.revenue_month}₽</div><div class="k">Thu tháng này</div></div>
+  </div>
+  <input class="srch" id="q" placeholder="🔍 Tìm khách…" value="${esc(Q)}">
+  <div class="chips">
+   ${[["all","Tất cả"],["online","🟢 Online"],["exp","⏳ Sắp hết"],["locked","⚫ Khoá"]].map(([k,l])=>`<span class="chip ${FILTER===k?'on':''}" data-f="${k}">${l}</span>`).join("")}
+  </div>
+  <div class="clist">${cs.map(rowHtml).join("")||'<div class="spin">Không có khách</div>'}</div>`;
+  document.getElementById("q").oninput=e=>{Q=e.target.value;renderHome();document.getElementById("q").focus();};
+  document.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{FILTER=c.dataset.f;renderHome();});
+  document.querySelectorAll(".crow").forEach(r=>r.onclick=()=>openClient(r.dataset.n));
+}
+function rowHtml(c){const[d,cls]=fdays(c);const traf=c.rx?`↓${fsize(c.rx)} ↑${fsize(c.tx)} · `:"";
+  return `<div class="crow" data-n="${esc(c.name)}"><span class="st" style="background:${dotColor(c)}"></span>
+   <div class="cmain"><div class="cn">${esc(c.name)}</div><div class="cm">${traf}${c.locked?"đã khoá":(c.online?"online":"offline")}</div></div>
+   <div class="cr"><div class="cd ${cls}">${d}</div><div class="ct">${c.plan?c.plan+" tháng":(c.no_expiry?"cũ":"thử")}</div></div></div>`;}
+
+async function openClient(name){
+  setTab("home");
+  app.innerHTML='<div class="spin">…</div>';
+  let c;try{c=await api("/api/client/"+name);}catch(e){toast(e.message);renderHome();return;}
+  SEL=c;const[dd,cls]=fdays(c);
+  const status=c.locked?'<span style="color:var(--grey)">⚫ Đã khoá</span>':
+    (c.online?`<span style="color:var(--green)">🟢 Online · ${c.handshake_s}s trước</span>`:
+     `<span style="color:var(--red)">🔴 Offline${c.handshake_s?" · "+Math.round(c.handshake_s/60)+"m":""}</span>`);
+  app.innerHTML=`<span class="back" id="bk">‹ Quay lại</span>
+   <div class="dhead"><div class="dav">👤</div><div><div class="dname">${esc(name)}</div><div class="donline">${status}</div></div></div>
+   <div class="kv">
+    <div class="kvr"><span class="k">Endpoint khách</span><span class="vv mono">${esc(c.endpoint||"—")}</span></div>
+    <div class="kvr"><span class="k">IP tunnel</span><span class="vv mono">${esc(c.ip||"—")}</span></div>
+    <div class="kvr"><span class="k">Traffic</span><span class="vv">↓${fsize(c.rx)} · ↑${fsize(c.tx)}</span></div>
+    <div class="kvr"><span class="k">Gói</span><span class="vv">${c.plan?c.plan+" tháng · "+c.price+"₽":(c.no_expiry?"cũ":"dùng thử")}</span></div>
+    <div class="kvr"><span class="k">Hết hạn</span><span class="vv ${cls==='g'?'':''}" style="color:${cls==='r'?'var(--red)':cls==='y'?'var(--yellow)':'var(--green)'}">${c.no_expiry?"chưa đặt":fdate(c.expires_at)+" · "+dd}</span></div>
+    <div class="kvr"><span class="k">Liên hệ</span><span class="vv">${esc(c.contact||"—")}</span></div>
+    <div class="kvr"><span class="k">Ghi chú</span><span class="vv">${esc(c.note||"—")}</span></div>
+   </div>
+   <div class="lab">GIA HẠN</div>
+   <div class="acts">
+    <button class="btn s" data-ext="1">➕1th</button><button class="btn s" data-ext="3">➕3th</button>
+    <button class="btn s" data-ext="6">➕6th</button><button class="btn s" data-ext="12">➕12th</button>
+   </div>
+   <div class="acts" style="margin-top:9px">
+    ${c.locked?'<button class="btn p" id="unlock">▶️ Mở khoá</button>':'<button class="btn s" id="lock">⏸ Khoá</button>'}
+    <button class="btn s" id="send">📎 Gửi config</button>
+    <button class="btn s full" id="note">📝 Ghi chú / liên hệ</button>
+    <button class="btn d full" id="del">🗑 Xoá khách</button>
+   </div>`;
+  document.getElementById("bk").onclick=renderHome;
+  document.querySelectorAll("[data-ext]").forEach(b=>b.onclick=()=>act("/api/client/"+name+"/extend",{plan:+b.dataset.ext},"Đã gia hạn",()=>openClient(name)));
+  const lk=document.getElementById("lock");if(lk)lk.onclick=()=>act("/api/client/"+name+"/lock",{},"Đã khoá",()=>openClient(name));
+  const ul=document.getElementById("unlock");if(ul)ul.onclick=()=>act("/api/client/"+name+"/unlock",{},"Đã mở",()=>openClient(name));
+  document.getElementById("send").onclick=()=>act("/api/client/"+name+"/send",{},"Đã gửi vào chat",()=>{});
+  document.getElementById("note").onclick=()=>{const nt=prompt("Ghi chú:",c.note||"");if(nt===null)return;const ct=prompt("Liên hệ:",c.contact||"");act("/api/client/"+name+"/note",{note:nt,contact:ct===null?c.contact:ct},"Đã lưu",()=>openClient(name));};
+  document.getElementById("del").onclick=()=>{if(confirm("Xoá "+name+"? Khách mất kết nối."))fetch("/api/client/"+name,{method:"DELETE",headers:{"X-Init-Data":INIT}}).then(()=>{toast("Đã xoá");load();});};
+}
+async function act(path,body,msg,then){try{await api(path,{method:"POST",body:JSON.stringify(body)});toast(msg);then();}catch(e){toast(e.message);}}
+
+function renderCreate(){
+  setTab("create");SEL=null;let plan=3;
+  const pr=DATA.prices;
+  const planCard=(m,lab,days)=>`<div class="plan ${m===plan?'sel':''}" data-m="${m}"><div><div class="pn">${lab}</div><div class="pp">hạn ${days} ngày</div></div><div class="pv">${pr[m]}₽</div></div>`;
+  app.innerHTML=`<div class="lab">TÊN KHÁCH</div><input class="inp" id="cname" placeholder="vd: petrov_ip">
+   <div class="lab">CHỌN GÓI</div><div class="plans">
+    ${planCard(1,"1 tháng",30)}${planCard(3,"3 tháng ⭐",90)}${planCard(6,"6 tháng",180)}${planCard(12,"12 tháng",360)}
+    <div class="plan ${plan==='trial'?'sel':''}" data-m="trial" style="border-style:dashed"><div><div class="pn">🎁 Dùng thử</div><div class="pp">3 ngày miễn phí</div></div><div class="pv" style="color:var(--sub)">0₽</div></div>
+   </div>
+   <button class="btn p full" id="go" style="margin-top:14px">✅ Tạo & gửi config</button>`;
+  function sel(){document.querySelectorAll(".plan").forEach(p=>p.classList.toggle("sel",(p.dataset.m==="trial"?"trial":+p.dataset.m)===plan));}
+  document.querySelectorAll(".plan").forEach(p=>p.onclick=()=>{plan=p.dataset.m==="trial"?"trial":+p.dataset.m;sel();});
+  document.getElementById("go").onclick=async()=>{
+    const name=document.getElementById("cname").value.trim();
+    if(!/^[A-Za-z0-9_]{2,32}$/.test(name)){toast("Tên: chữ/số/gạch dưới, 2–32");return;}
+    document.getElementById("go").textContent="⏳ Đang tạo…";
+    try{await api("/api/client",{method:"POST",body:JSON.stringify({name,plan})});toast("Đã tạo, config gửi vào chat");await load();}
+    catch(e){toast(e.message);renderCreate();}
+  };
+}
+
+async function renderRevenue(){
+  setTab("revenue");SEL=null;app.innerHTML='<div class="spin">…</div>';
+  let r;try{r=await api("/api/revenue");}catch(e){toast(e.message);return;}
+  app.innerHTML=`<div class="bigk">Thu tháng này</div><div class="big">${r.total}₽</div>
+   <div class="kv" style="margin-top:12px">
+    <div class="kvr"><span class="k">Khách đang hoạt động</span><span class="vv">${r.active}</span></div>
+    <div class="kvr"><span class="k">Khách mới (${r.new[0]})</span><span class="vv">${r.new[1]}₽</span></div>
+    <div class="kvr"><span class="k">Gia hạn (${r.renew[0]})</span><span class="vv">${r.renew[1]}₽</span></div>
+    <div class="kvr"><span class="k" style="color:var(--green)">Tổng thu</span><span class="vv" style="color:var(--green)">${r.total}₽</span></div>
+   </div>
+   <div class="lab">SẮP HẾT HẠN (7 NGÀY)</div>
+   <div class="clist">${r.expiring.map(rowHtml).join("")||'<div class="spin">Không có</div>'}</div>`;
+  document.querySelectorAll(".crow").forEach(x=>x.onclick=()=>openClient(x.dataset.n));
+}
+
+async function renderSettings(){
+  setTab("settings");SEL=null;app.innerHTML='<div class="spin">…</div>';
+  let s;try{s=await api("/api/settings");}catch(e){toast(e.message);return;}
+  app.innerHTML=`<div class="lab">GIÁ GÓI (₽)</div>
+   ${[1,3,6,12].map(m=>`<div class="kvr" style="padding:8px 2px"><span class="k">${m} tháng</span><input class="inp" style="width:120px;padding:8px 10px" type="number" id="p${m}" value="${s.prices[m]}"></div>`).join("")}
+   <div class="lab">NHẮC TRƯỚC (NGÀY)</div><input class="inp" type="number" id="rd" value="${s.reminder_days}">
+   <button class="btn p full" id="save" style="margin-top:16px">💾 Lưu</button>
+   <div style="color:var(--sub);font-size:11px;margin-top:14px;line-height:1.5">Node: ${esc(DATA.node.endpoint)}<br>Khoá khi hết hạn: tự động · không xoá key.</div>`;
+  document.getElementById("save").onclick=async()=>{
+    const prices={};[1,3,6,12].forEach(m=>prices[m]=+document.getElementById("p"+m).value||0);
+    try{await api("/api/settings",{method:"POST",body:JSON.stringify({prices,reminder_days:+document.getElementById("rd").value||3})});toast("Đã lưu");await load();}
+    catch(e){toast(e.message);}
+  };
+}
+
+document.querySelectorAll("#nav div").forEach(d=>d.onclick=()=>{
+  const t=d.dataset.tab;
+  if(t==="home")renderHome();else if(t==="create")renderCreate();
+  else if(t==="revenue")renderRevenue();else if(t==="settings")renderSettings();
+});
+load();
+</script>
+</body></html>
