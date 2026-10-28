@@ -125,7 +125,13 @@ def create(payload: dict = Body(...), x_init_data: str = Header(None)):
     ok, conf, err = awg.add_client(name)
     if not ok:
         raise HTTPException(500, str(err))
-    if plan == "trial":
+    days = payload.get("days")
+    if days:
+        d = int(days)
+        if d < 1 or d > 3650:
+            raise HTTPException(400, "số ngày 1–3650")
+        exp = db.add(name, 0, int(payload.get("price", 0) or 0), NODE, days=d)
+    elif plan == "trial":
         exp = db.add(name, 0, 0, NODE, trial_days=3)
     else:
         m = int(plan); exp = db.add(name, m, db.get_price(m), NODE)
@@ -143,8 +149,15 @@ def send_config(name: str, x_init_data: str = Header(None)):
 @app.post("/api/client/{name}/extend")
 def extend(name: str, payload: dict = Body(...), x_init_data: str = Header(None)):
     need_auth(x_init_data)
-    m = int(payload.get("plan", 1))
-    exp = db.extend(name, m, db.get_price(m))
+    days = payload.get("days")
+    if days:
+        d = int(days)
+        if d < 1 or d > 3650:
+            raise HTTPException(400, "số ngày 1–3650")
+        exp = db.extend(name, 0, int(payload.get("price", 0) or 0), days=d)
+    else:
+        m = int(payload.get("plan", 1))
+        exp = db.extend(name, m, db.get_price(m))
     c = db.get(name); w = awg.wg_status().get(name, {})
     if c and w.get("ip"):
         awg.unlock_client(w["ip"])

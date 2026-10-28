@@ -151,6 +151,7 @@ async function openClient(name){
    <div class="acts">
     <button class="btn s" data-ext="1">➕1th</button><button class="btn s" data-ext="3">➕3th</button>
     <button class="btn s" data-ext="6">➕6th</button><button class="btn s" data-ext="12">➕12th</button>
+    <button class="btn s full" id="extdays">📅 Gia hạn số ngày</button>
    </div>
    <div class="acts" style="margin-top:9px">
     ${c.locked?'<button class="btn p" id="unlock">▶️ Mở khoá</button>':'<button class="btn s" id="lock">⏸ Khoá</button>'}
@@ -160,6 +161,7 @@ async function openClient(name){
    </div>`;
   document.getElementById("bk").onclick=renderHome;
   document.querySelectorAll("[data-ext]").forEach(b=>b.onclick=()=>act("/api/client/"+name+"/extend",{plan:+b.dataset.ext},"Đã gia hạn",()=>openClient(name)));
+  document.getElementById("extdays").onclick=()=>{const d=prompt("Số ngày gia hạn:");if(d===null)return;const dd=+d;if(!(dd>=1&&dd<=3650)){toast("1–3650 ngày");return;}act("/api/client/"+name+"/extend",{days:dd},"Đã gia hạn",()=>openClient(name));};
   const lk=document.getElementById("lock");if(lk)lk.onclick=()=>act("/api/client/"+name+"/lock",{},"Đã khoá",()=>openClient(name));
   const ul=document.getElementById("unlock");if(ul)ul.onclick=()=>act("/api/client/"+name+"/unlock",{},"Đã mở",()=>openClient(name));
   document.getElementById("send").onclick=()=>act("/api/client/"+name+"/send",{},"Đã gửi vào chat",()=>{});
@@ -176,15 +178,20 @@ function renderCreate(){
    <div class="lab">CHỌN GÓI</div><div class="plans">
     ${planCard(1,"1 tháng",30)}${planCard(3,"3 tháng ⭐",90)}${planCard(6,"6 tháng",180)}${planCard(12,"12 tháng",360)}
     <div class="plan ${plan==='trial'?'sel':''}" data-m="trial" style="border-style:dashed"><div><div class="pn">🎁 Dùng thử</div><div class="pp">3 ngày miễn phí</div></div><div class="pv" style="color:var(--sub)">0₽</div></div>
+    <div class="plan ${plan==='custom'?'sel':''}" data-m="custom"><div><div class="pn">📅 Số ngày tuỳ chọn</div><div class="pp">nhập số ngày + giá</div></div><div class="pv" style="color:var(--sub)">—</div></div>
    </div>
+   <div id="cbox" class="${plan==='custom'?'':'hide'}"><div class="lab">SỐ NGÀY</div><input class="inp" id="cdays" type="number" placeholder="vd 45"><div class="lab">GIÁ (₽)</div><input class="inp" id="cprice" type="number" value="0"></div>
    <button class="btn p full" id="go" style="margin-top:14px">✅ Tạo & gửi config</button>`;
-  function sel(){document.querySelectorAll(".plan").forEach(p=>p.classList.toggle("sel",(p.dataset.m==="trial"?"trial":+p.dataset.m)===plan));}
-  document.querySelectorAll(".plan").forEach(p=>p.onclick=()=>{plan=p.dataset.m==="trial"?"trial":+p.dataset.m;sel();});
+  const norm=m=>(m==="trial"||m==="custom")?m:+m;
+  function sel(){document.querySelectorAll(".plan").forEach(p=>p.classList.toggle("sel",norm(p.dataset.m)===plan));document.getElementById("cbox").classList.toggle("hide",plan!=="custom");}
+  document.querySelectorAll(".plan").forEach(p=>p.onclick=()=>{plan=norm(p.dataset.m);sel();});
   document.getElementById("go").onclick=async()=>{
     const name=document.getElementById("cname").value.trim();
     if(!/^[A-Za-z0-9_]{2,32}$/.test(name)){toast("Tên: chữ/số/gạch dưới, 2–32");return;}
+    let body={name,plan};
+    if(plan==="custom"){const dd=+document.getElementById("cdays").value;if(!(dd>=1&&dd<=3650)){toast("Số ngày 1–3650");return;}body={name,days:dd,price:+document.getElementById("cprice").value||0};}
     document.getElementById("go").textContent="⏳ Đang tạo…";
-    try{await api("/api/client",{method:"POST",body:JSON.stringify({name,plan})});toast("Đã tạo, config gửi vào chat");await load();}
+    try{await api("/api/client",{method:"POST",body:JSON.stringify(body)});toast("Đã tạo, config gửi vào chat");await load();}
     catch(e){toast(e.message);renderCreate();}
   };
 }

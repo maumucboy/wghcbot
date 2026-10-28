@@ -135,6 +135,7 @@ async def show_client(update, context, name):
          InlineKeyboardButton("➕3th", callback_data=f"ext:{name}:3"),
          InlineKeyboardButton("➕6th", callback_data=f"ext:{name}:6"),
          InlineKeyboardButton("➕12th", callback_data=f"ext:{name}:12")],
+        [InlineKeyboardButton("📅 Gia hạn số ngày", callback_data=f"extd:{name}")],
         [lock_btn, InlineKeyboardButton("🗑 Xoá", callback_data=f"del:{name}")],
         [InlineKeyboardButton("📎 Tải config", callback_data=f"conf:{name}"),
          InlineKeyboardButton("📝 Ghi chú", callback_data=f"note:{name}")],
@@ -170,6 +171,7 @@ async def ask_plan(update, context, name):
     context.user_data["new_name"] = name
     rows = [[InlineKeyboardButton(f"{PLAN_LABELS[m]} — {db.get_price(m)}₽", callback_data=f"mk:{m}")]
             for m in (1, 3, 6, 12)]
+    rows.append([InlineKeyboardButton("📅 Số ngày tuỳ chọn", callback_data="mk:days")])
     rows.append([InlineKeyboardButton("🎁 Dùng thử 3 ngày", callback_data="mk:trial")])
     rows.append([InlineKeyboardButton("⬅️ Huỷ", callback_data="home")])
     await context.bot.send_message(update.effective_chat.id,
@@ -181,6 +183,11 @@ async def do_create(update, context, plan):
     name = context.user_data.get("new_name")
     if not name:
         await update.callback_query.answer("Hết phiên, tạo lại", show_alert=True); return
+    if plan == "days":
+        context.user_data["await"] = "cdays"
+        await update.callback_query.edit_message_text(f"📅 Nhập số ngày cho <b>{html.escape(name)}</b> (vd 45):",
+                                                      parse_mode="HTML")
+        return
     await update.callback_query.edit_message_text(f"⏳ Đang tạo {name}…")
     ok, conf, err = awg.add_client(name)
     if not ok:
@@ -260,6 +267,37 @@ async def on_text(update, context):
         name = st.split(":", 1)[1]; db.set_field(name, "note", txt)
         context.user_data.pop("await", None)
         await update.message.reply_text(f"✅ Đã lưu ghi chú cho {name}.")
+    elif st == "cdays":
+        name = context.user_data.get("new_name")
+        try:
+            d = int(txt)
+        except ValueError:
+            await update.message.reply_text("Nhập số nguyên ngày:"); return
+        if not (1 <= d <= 3650):
+            await update.message.reply_text("Số ngày 1–3650:"); return
+        context.user_data.pop("await", None); context.user_data.pop("new_name", None)
+        await update.message.reply_text(f"⏳ Đang tạo {name}…")
+        ok, conf, err = awg.add_client(name)
+        if not ok:
+            await update.message.reply_text(f"❌ {html.escape(str(err))}"); return
+        exp = db.add(name, 0, 0, NODE, days=d)
+        await update.message.reply_text(f"✅ {name} · hạn {fdate(exp)} · {fdays(exp)}")
+        await send_config(update, context, name)
+    elif st and st.startswith("edays:"):
+        name = st.split(":", 1)[1]
+        try:
+            d = int(txt)
+        except ValueError:
+            await update.message.reply_text("Nhập số nguyên ngày:"); return
+        if not (1 <= d <= 3650):
+            await update.message.reply_text("Số ngày 1–3650:"); return
+        context.user_data.pop("await", None)
+        exp = db.extend(name, 0, 0, days=d)
+        w = awg.wg_status().get(name, {})
+        if w.get("ip"):
+            awg.unlock_client(w["ip"])
+        db.set_locked(name, 0)
+        await update.message.reply_text(f"✅ Gia hạn {name} tới {fdate(exp)} · {fdays(exp)}")
 
 
 async def on_cb(update, context):
@@ -303,6 +341,10 @@ async def on_cb(update, context):
                     awg.unlock_client(awg.wg_status()[name]["ip"])
             await q.answer(f"Đã gia hạn tới {fdate(exp)}", show_alert=True)
             await show_client(update, context, name)
+        elif d.startswith("extd:"):
+            name = d.split(":", 1)[1]
+            context.user_data["await"] = f"edays:{name}"
+            await context.bot.send_message(update.effective_chat.id, f"📅 Nhập số ngày gia hạn cho {name}:")
         elif d.startswith("lock:"):
             name = d.split(":", 1)[1]; w = awg.wg_status().get(name, {})
             if w.get("ip"):

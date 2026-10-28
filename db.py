@@ -56,9 +56,9 @@ def reminder_days():
 
 
 # ---------- clients ----------
-def add(name, plan_months, price=0, node="eaz2", trial_days=None):
+def add(name, plan_months, price=0, node="eaz2", trial_days=None, days=None):
     now = int(time.time())
-    days = trial_days if trial_days else PLAN_DAYS.get(plan_months, 30)
+    days = days or trial_days or PLAN_DAYS.get(plan_months, 30)
     exp = now + days * DAY
     with _conn() as c:
         c.execute("""INSERT OR REPLACE INTO clients
@@ -69,12 +69,15 @@ def add(name, plan_months, price=0, node="eaz2", trial_days=None):
     return exp
 
 
-def extend(name, plan_months, price=0):
+def extend(name, plan_months, price=0, days=None):
     now = int(time.time())
-    days = PLAN_DAYS.get(plan_months, 30)
+    days = days or PLAN_DAYS.get(plan_months, 30)
     with _conn() as c:
         r = c.execute("SELECT expires_at FROM clients WHERE name=?", (name,)).fetchone()
         base = max(r["expires_at"], now) if r else now
+        # nếu khách đang "chưa đặt hạn" (cũ, hạn ~100 năm), đặt lại từ hôm nay
+        if r and r["expires_at"] > now + 365 * 50 * DAY:
+            base = now
         exp = base + days * DAY
         c.execute("UPDATE clients SET expires_at=?, plan_months=?, locked=0, reminded=0 WHERE name=?",
                   (exp, plan_months, name))
