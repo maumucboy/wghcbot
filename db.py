@@ -23,6 +23,11 @@ def init():
         c.execute("""CREATE TABLE IF NOT EXISTS revenue(
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, kind TEXT, amount INTEGER, ts INTEGER)""")
         c.execute("CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
+        c.execute("""CREATE TABLE IF NOT EXISTS routers(
+            id INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT UNIQUE, base TEXT, login TEXT,
+            pass_enc TEXT, iface TEXT DEFAULT '', client TEXT DEFAULT '',
+            last_check INTEGER DEFAULT 0, last_state TEXT DEFAULT 'new', last_hs INTEGER,
+            last_err TEXT DEFAULT '', last_reconnect INTEGER DEFAULT 0, created_at INTEGER)""")
 
 
 # ---------- settings ----------
@@ -165,3 +170,69 @@ def revenue_month(ts=None):
     for r in rows:
         out[r["kind"]] = (r["n"], r["s"]); out["total"] += r["s"]
     return out
+
+
+# ---------- routers (modem khách) ----------
+KEY_PATH = os.environ.get("ROUTER_KEY_FILE", os.path.join(os.path.dirname(DB_PATH), "router.key"))
+ROUTER_FIELDS = ("label", "base", "login", "pass_enc", "iface", "client", "last_check",
+                 "last_state", "last_hs", "last_err", "last_reconnect")
+
+
+def _fernet():
+    from cryptography.fernet import Fernet
+    key = os.environ.get("ROUTER_KEY")
+    if not key:
+        if os.path.exists(KEY_PATH):
+            key = open(KEY_PATH).read().strip()
+        else:
+            key = Fernet.generate_key().decode()
+            fd = os.open(KEY_PATH, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w") as f:
+                f.write(key)
+    return Fernet(key.encode())
+
+
+def enc(s):
+    return _fernet().encrypt(s.encode()).decode()
+
+
+def dec(s):
+    return _fernet().decrypt(s.encode()).decode()
+
+
+def router_add(label, base, login, password, iface="", client=""):
+    with _conn() as c:
+        c.execute("""INSERT INTO routers(label,base,login,pass_enc,iface,client,created_at)
+            VALUES(?,?,?,?,?,?,?)""", (label, base, login, enc(password), iface, client, int(time.time())))
+
+
+def router_update(rid, **kw):
+    kw = {k: v for k, v in kw.items() if k in ROUTER_FIELDS}
+    if "password" in kw:
+        kw["pass_enc"] = enc(kw.pop("password"))
+    if not kw:
+        return
+    with _conn() as c:
+        c.execute(f"UPDATE routers SET {', '.join(k + '=?' for k in kw)} WHERE id=?", (*kw.values(), rid))
+
+
+def router_get(rid):
+    with _conn() as c:
+        r = c.execute("SELECT * FROM routers WHERE id=?", (rid,)).fetchone()
+        return dict(r) if r else None
+
+
+def router_by_label(label):
+    with _conn() as c:
+        r = c.execute("SELECT * FROM routers WHERE label=?", (label,)).fetchone()
+        return dict(r) if r else None
+
+
+def routers_all():
+    with _conn() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM routers ORDER BY label").fetchall()]
+
+
+def router_delete(rid):
+    with _conn() as c:
+        c.execute("DELETE FROM routers WHERE id=?", (rid,))

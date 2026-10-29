@@ -53,3 +53,13 @@ Giá gói sửa ngay trong **tab Cài** của Mini App (lưu vào DB).
 - Doanh thu tháng, biểu đồ; sao lưu về Telegram
 - Mini App: giao diện web đầy đủ, tab Khách/Tạo/Doanh thu/Cài
 - Tự nạp khách tạo trước bot
+
+## Router khách (🛰 trên Dashboard)
+
+Bot đăng nhập modem Keenetic/Netcraze của khách qua **KeenDNS** (RCI API) để reconnect tunnel — dùng khi đổi IP server.
+
+- **Thêm router**: gửi `địa_chỉ_KeenDNS tên [mật_khẩu]`. Bỏ mật khẩu → bot sinh mật khẩu, bạn tạo user `hcbot` (quyền web) trên router lúc pre-config.
+- **Reconnect tất cả** / **Chỉ cái đang treo** (handshake > 5 phút), **Thử lại lỗi**.
+- **Watchdog** (bật/tắt): 5 phút/lần, tự reconnect tunnel treo (mỗi router tối đa 1 lần/15 phút), báo admin khi router mất truy cập.
+- Tunnel tự dò theo endpoint `AWG_ENDPOINT_DOMAIN`. Mật khẩu mã hoá (Fernet), key ở `/root/awgbot/router.key` (600) — **sao lưu file này**, mất key = phải nhập lại mật khẩu router.
+- Biến tuỳ chọn: `ROUTER_LOGIN` (mặc định `hcbot`), `ROUTER_PARALLEL` (8).

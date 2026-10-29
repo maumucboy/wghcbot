@@ -4,7 +4,7 @@ import os, time, html, logging, asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, WebAppInfo
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                           MessageHandler, filters, ContextTypes)
-import awg, db
+import awg, db, routers_ui
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("awgbot")
@@ -84,6 +84,7 @@ async def show_dashboard(update, context, edit=False):
          InlineKeyboardButton("💰 Doanh thu", callback_data="revenue")],
         [InlineKeyboardButton("👥 Danh sách", callback_data="list:0"),
          InlineKeyboardButton("💾 Sao lưu", callback_data="backup")],
+        [InlineKeyboardButton(f"🛰 Router khách ({len(db.routers_all())})", callback_data="rt:menu")],
     ] + ([[InlineKeyboardButton("📱 Mở Mini App", web_app=WebAppInfo(url=PANEL_URL))]] if PANEL_URL.startswith("https://") else []))
     text = head + body
     if edit and update.callback_query:
@@ -263,6 +264,8 @@ async def on_text(update, context):
             await update.message.reply_text("Tên đã tồn tại. Gửi tên khác:"); return
         context.user_data.pop("await", None)
         await ask_plan(update, context, txt)
+    elif st == "rt_add":
+        await routers_ui.on_add_text(update, context, txt)
     elif st and st.startswith("note:"):
         name = st.split(":", 1)[1]; db.set_field(name, "note", txt)
         context.user_data.pop("await", None)
@@ -307,7 +310,9 @@ async def on_cb(update, context):
     await q.answer()
     d = q.data
     try:
-        if d == "home":
+        if d.startswith("rt:"):
+            await routers_ui.on_cb(update, context, d)
+        elif d == "home":
             await show_dashboard(update, context, edit=True)
         elif d == "new":
             await ask_new_name(update, context)
@@ -431,6 +436,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.job_queue.run_repeating(job_expiry, interval=1800, first=30)
     app.job_queue.run_repeating(job_node_watch, interval=600, first=120)
+    app.job_queue.run_repeating(routers_ui.job_watchdog, interval=300, first=180, data=ADMIN_ID)
     log.info("bot starting")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
