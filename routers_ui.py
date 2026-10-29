@@ -189,16 +189,17 @@ async def ask_add(update, context):
     context.user_data["await"] = "rt_add"
     await update.callback_query.edit_message_text(
         "➕ <b>Thêm router</b>\nGửi 1 dòng:\n"
-        "<code>địa_chỉ_KeenDNS tên [mật_khẩu]</code>\n\n"
-        "Ví dụ: <code>ivan123.keenetic.pro ivan</code>\n"
-        "Bỏ trống mật khẩu → bot tự sinh để bạn tạo user trên router.",
+        "<code>địa_chỉ tên_khách [user] [mật_khẩu]</code>\n\n"
+        "• <code>ivan123.keenetic.pro ivan</code> → bot sinh mật khẩu cho user <code>hcbot</code>\n"
+        "• <code>ivan123.keenetic.pro ivan Pass123</code> → user <code>hcbot</code>\n"
+        "• <code>ivan123.keenetic.pro ivan admin Pass123</code> → user tuỳ chọn",
         parse_mode="HTML", reply_markup=KB([[B("⬅️ Huỷ", callback_data="rt:menu")]]))
 
 
 async def on_add_text(update, context, txt):
     parts = txt.split()
-    if len(parts) not in (2, 3):
-        await update.message.reply_text("Sai định dạng. Gửi: địa_chỉ tên [mật_khẩu]"); return
+    if len(parts) not in (2, 3, 4):
+        await update.message.reply_text("Sai định dạng. Gửi: địa_chỉ tên_khách [user] [mật_khẩu]"); return
     addr, label = parts[0], parts[1]
     if not re.fullmatch(r"(https?://)?[A-Za-z0-9.-]+(:\d+)?/?", addr) or "." not in addr:
         await update.message.reply_text("Địa chỉ không hợp lệ. Ví dụ: ivan123.keenetic.pro"); return
@@ -207,9 +208,10 @@ async def on_add_text(update, context, txt):
     if db.router_by_label(label):
         await update.message.reply_text("Tên đã có. Chọn tên khác."); return
     gen = len(parts) == 2
-    pwd = parts[2] if not gen else secrets.token_urlsafe(12)
+    login = parts[2] if len(parts) == 4 else BOT_LOGIN
+    pwd = parts[-1] if not gen else secrets.token_urlsafe(12)
     client = label if db.get(label) else ""
-    db.router_add(label, keenetic.norm_base(addr), BOT_LOGIN, pwd, client=client)
+    db.router_add(label, keenetic.norm_base(addr), login, pwd, client=client)
     context.user_data.pop("await", None)
     r = db.router_by_label(label)
     if gen:

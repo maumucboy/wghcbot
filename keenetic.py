@@ -56,7 +56,7 @@ class Router:
         h = hashlib.sha256((ch + md5).encode()).hexdigest()
         r = self._req("POST", "/auth", json={"login": self.login, "password": h})
         if r.status_code != 200:
-            raise RouterError("auth", "sai user/mật khẩu hoặc user thiếu quyền")
+            raise RouterError("auth", f"router từ chối user '{self.login}': sai mật khẩu hoặc user thiếu quyền web")
         return True
 
     def _json(self, r):
