@@ -118,34 +118,52 @@ class Router:
             raise RouterError("iface", f"không có interface {iface}")
         return parse_status(v)
 
-    def reconnect(self, iface, pause=3, wait_hs=20, poll=2, sleep=time.sleep):
-        """Tắt -> chờ -> bật -> chờ handshake mới. Trả status sau cùng.
-        Luôn cố bật lại (3 lần) dù bước tắt/kiểm tra lỗi, để không bỏ router ở trạng thái tắt."""
-        self.cli(f"interface {iface} down")
-        sleep(pause)
-        last = None
-        for _ in range(3):
-            try:
-                self.cli(f"interface {iface} up")
-                last = None
-                break
-            except RouterError as e:
-                last = e
-                sleep(2)
-        if last:
-            raise last
+    def _relogin(self):
+        self.s.close()
+        self.s = requests.Session()
+        self.s.headers["User-Agent"] = USER_AGENT
+        self.auth()
+
+    def reconnect(self, iface, wait=75, poll=3, sleep=time.sleep):
+        """Tắt + bật tunnel trong CÙNG MỘT request, rồi đăng nhập lại kiểm tra.
+
+        Router thường đi Internet qua chính tunnel này (defaultgw), nên khi tunnel tắt
+        thì đường KeenDNS tới bot đứt giữa chừng: request "down" riêng lẻ sẽ treo và lệnh
+        "up" gửi sau không bao giờ tới. Gửi gộp [down, up] để router tự làm cả hai;
+        response mất cũng không sao. Sau đó dò lại tối đa `wait` giây, thấy tunnel chưa
+        bật thì gửi "up" lần nữa."""
         t0 = time.monotonic()
-        st = None
-        while time.monotonic() - t0 < wait_hs:
+        body = [{"parse": f"interface {iface} down"}, {"parse": f"interface {iface} up"}]
+        try:
+            self.s.request("POST", self.base + "/rci/", json=body, timeout=8)
+        except requests.RequestException:
+            pass  # bình thường: đường về đứt khi tunnel tắt
+        st, last_err = None, None
+        while time.monotonic() - t0 < wait:
             sleep(poll)
             try:
+                self._relogin()
                 st = self.wg_status(iface)
-            except RouterError:
+            except RouterError as e:
+                last_err = e
                 continue
-            if st["handshake_s"] is not None and st["handshake_s"] <= wait_hs + pause + 5:
+            if not st["up"]:
+                try:
+                    self.cli(f"interface {iface} up")
+                except RouterError as e:
+                    last_err = e
+                continue
+            elapsed = time.monotonic() - t0
+            restarted = st["uptime"] is not None and st["uptime"] <= elapsed + 5
+            fresh = st["handshake_s"] is not None and st["handshake_s"] <= elapsed + 5
+            if restarted and fresh:
                 return st
-        st = st or self.wg_status(iface)
-        raise RouterError("handshake", f"tunnel đã bật nhưng chưa có handshake ({fmt_hs(st['handshake_s'])})")
+        if st is None:
+            raise RouterError(getattr(last_err, "code", "offline"),
+                              f"mất liên lạc router sau khi reconnect ({last_err})")
+        if not st["up"]:
+            raise RouterError("rci", "tunnel vẫn tắt sau khi gửi lệnh bật")
+        raise RouterError("handshake", f"tunnel đã bật nhưng chưa có handshake mới ({fmt_hs(st['handshake_s'])})")
 
 
 # ---------- helpers ----------
@@ -192,9 +210,11 @@ def parse_status(v):
             tx = max(tx, int(val))
     state = str(v.get("state", "")).lower()
     link = str(v.get("link", "")).lower()
-    up = state in ("up", "") and link in ("up", "")
-    return {"up": up and state == "up", "handshake_s": hs, "rx": rx, "tx": tx,
-            "state": state or "?", "link": link or "?"}
+    conf = str(v.get("summary", {}).get("layer", {}).get("conf", "")).lower() if isinstance(v.get("summary"), dict) else ""
+    up = state == "up" and conf in ("running", "")
+    uptime = v.get("uptime") if isinstance(v.get("uptime"), (int, float)) else None
+    return {"up": up, "handshake_s": hs, "rx": rx, "tx": tx, "uptime": uptime,
+            "state": state or "?", "link": link or "?", "conf": conf or "?"}
 
 
 def _resolve(host):
