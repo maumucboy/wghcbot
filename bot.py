@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bot Telegram quản lý AmneziaWG — dashboard, tạo/gia hạn/khoá khách, nhắc hạn."""
 import os, time, html, logging, asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, WebAppInfo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, WebAppInfo, LinkPreviewOptions
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                           MessageHandler, filters, ContextTypes)
 import awg, db, routers_ui
@@ -17,6 +17,14 @@ ENDPOINT = os.environ.get("AWG_ENDPOINT_DOMAIN", "eaz2.hoichamvn.uk")
 PANEL_URL = os.environ.get("PANEL_URL", "")  # https://panel.hoichamvn.uk cho nút Mini App
 
 PLAN_LABELS = {1: "1 tháng", 3: "3 tháng", 6: "6 tháng", 12: "12 tháng"}
+NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
+
+
+def name_link(context, name):
+    """Tên khách bấm được: mở deep link /start c_<tên> -> hiện thẻ khách."""
+    u = context.bot.username
+    n = html.escape(name)
+    return f'<a href="https://t.me/{u}?start=c_{n}">{n}</a>' if u else f"<code>{n}</code>"
 
 authed = set()  # chat_id đã nhập đúng mật khẩu phiên này
 
@@ -74,7 +82,7 @@ async def show_dashboard(update, context, edit=False):
     for c in clients[:40]:
         w = wg.get(c["name"], {})
         traf = f" · ↓{fsize(w.get('rx',0))} ↑{fsize(w.get('tx',0))}" if w.get("rx") else ""
-        lines.append(f"{dot(c,w)} <code>{html.escape(c['name'])}</code> · {fdays(c['expires_at'])}{traf}")
+        lines.append(f"{dot(c,w)} {name_link(context, c['name'])} · {fdays(c['expires_at'])}{traf}")
     body = "\n".join(lines) if lines else "<i>Chưa có khách.</i>"
     exp_n = len(db.expiring(3))
     kb = InlineKeyboardMarkup([
@@ -88,9 +96,11 @@ async def show_dashboard(update, context, edit=False):
     ] + ([[InlineKeyboardButton("📱 Mở Mini App", web_app=WebAppInfo(url=PANEL_URL))]] if PANEL_URL.startswith("https://") else []))
     text = head + body
     if edit and update.callback_query:
-        await update.callback_query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+        await update.callback_query.edit_message_text(text, parse_mode="HTML", reply_markup=kb,
+                                                      link_preview_options=NO_PREVIEW)
     else:
-        await context.bot.send_message(update.effective_chat.id, text, parse_mode="HTML", reply_markup=kb)
+        await context.bot.send_message(update.effective_chat.id, text, parse_mode="HTML", reply_markup=kb,
+                                       link_preview_options=NO_PREVIEW)
 
 
 # ---------- Danh sách / chi tiết ----------
@@ -113,10 +123,14 @@ async def show_list(update, context, page=0):
         f"👥 Khách ({len(clients)})", reply_markup=InlineKeyboardMarkup(rows))
 
 
-async def show_client(update, context, name):
+async def show_client(update, context, name, new_msg=False):
     c = db.get(name)
     if not c:
-        await update.callback_query.answer("Không tìm thấy", show_alert=True); return
+        if new_msg:
+            await context.bot.send_message(update.effective_chat.id, f"Không tìm thấy khách {html.escape(name)}.")
+        else:
+            await update.callback_query.answer("Không tìm thấy", show_alert=True)
+        return
     w = awg.wg_status().get(name, {})
     status = "⚫ Đã khoá" if c["locked"] else (
         f"🟢 Online · handshake {w['handshake_s']}s trước" if w.get("online")
@@ -142,7 +156,10 @@ async def show_client(update, context, name):
          InlineKeyboardButton("📝 Ghi chú", callback_data=f"note:{name}")],
         [InlineKeyboardButton("🏠 Dashboard", callback_data="home")],
     ])
-    await update.callback_query.edit_message_text(txt, parse_mode="HTML", reply_markup=kb)
+    if new_msg:
+        await context.bot.send_message(update.effective_chat.id, txt, parse_mode="HTML", reply_markup=kb)
+    else:
+        await update.callback_query.edit_message_text(txt, parse_mode="HTML", reply_markup=kb)
 
 
 async def send_config(update, context, name):
@@ -234,6 +251,13 @@ async def show_revenue(update, context):
 async def cmd_start(update, context):
     if not is_admin(update):
         return
+    arg = context.args[0] if context.args else ""
+    if arg.startswith("c_") and update.effective_chat.id in authed:
+        try:
+            await update.message.delete()  # xoá dòng "/start c_..." cho chat gọn
+        except Exception:
+            pass
+        await show_client(update, context, arg[2:], new_msg=True); return
     if update.effective_chat.id in authed:
         await show_dashboard(update, context); return
     if not BOT_PASS:
