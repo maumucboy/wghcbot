@@ -4,7 +4,7 @@ import os, time, html, logging, asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, WebAppInfo, LinkPreviewOptions
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                           MessageHandler, filters, ContextTypes)
-import awg, db, routers_ui
+import awg, db, routers_ui, live_ui
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("awgbot")
@@ -81,7 +81,7 @@ async def show_dashboard(update, context, edit=False):
     lines = []
     for c in clients[:40]:
         w = wg.get(c["name"], {})
-        traf = f" · ↓{fsize(w.get('rx',0))} ↑{fsize(w.get('tx',0))}" if w.get("rx") else ""
+        traf = f" · ↓{fsize(w.get('tx',0))} ↑{fsize(w.get('rx',0))}" if w.get("rx") else ""
         lines.append(f"{dot(c,w)} {name_link(context, c['name'])} · {fdays(c['expires_at'])}{traf}")
     body = "\n".join(lines) if lines else "<i>Chưa có khách.</i>"
     exp_n = len(db.expiring(3))
@@ -92,7 +92,8 @@ async def show_dashboard(update, context, edit=False):
          InlineKeyboardButton("💰 Doanh thu", callback_data="revenue")],
         [InlineKeyboardButton("👥 Danh sách", callback_data="list:0"),
          InlineKeyboardButton("💾 Sao lưu", callback_data="backup")],
-        [InlineKeyboardButton(f"🛰 Router khách ({len(db.routers_all())})", callback_data="rt:menu")],
+        [InlineKeyboardButton("📡 Đang kết nối", callback_data="lv:menu"),
+         InlineKeyboardButton(f"🛰 Router ({len(db.routers_all())})", callback_data="rt:menu")],
     ] + ([[InlineKeyboardButton("📱 Mở Mini App", web_app=WebAppInfo(url=PANEL_URL))]] if PANEL_URL.startswith("https://") else []))
     text = head + body
     if edit and update.callback_query:
@@ -123,7 +124,7 @@ async def show_list(update, context, page=0):
         f"👥 Khách ({len(clients)})", reply_markup=InlineKeyboardMarkup(rows))
 
 
-async def show_client(update, context, name, new_msg=False):
+async def show_client(update, context, name, new_msg=False, live=None):
     c = db.get(name)
     if not c:
         if new_msg:
@@ -136,13 +137,16 @@ async def show_client(update, context, name, new_msg=False):
         f"🟢 Online · handshake {w['handshake_s']}s trước" if w.get("online")
         else ("🔴 Offline" + (f" · {w['handshake_s']//60}m trước" if w.get("handshake_s") else " · chưa kết nối")))
     txt = (f"👤 <b>{html.escape(name)}</b>\n{status}\n\n"
-           f"Endpoint khách: <code>{w.get('endpoint') or '—'}</code>\n"
            f"IP tunnel: <code>{w.get('ip') or '—'}</code>\n"
-           f"Traffic: ↓{fsize(w.get('rx',0))} · ↑{fsize(w.get('tx',0))}\n"
+           f"Traffic (từ lúc bật AWG): ↓{fsize(w.get('tx',0))} · ↑{fsize(w.get('rx',0))}\n"
            f"Gói: {c['plan_months']} tháng\n"
            f"Hết hạn: <b>{fdate(c['expires_at'])}</b> · {fdays(c['expires_at'])}\n"
            f"Giá: {c['price']}₽ · Liên hệ: {html.escape(c['contact'] or '—')}\n"
            f"Ghi chú: {html.escape(c['note'] or '—')}")
+    try:
+        txt += "\n" + live_ui.client_block(name, w, live)
+    except Exception:
+        log.exception("client_block %s", name)
     lock_btn = (InlineKeyboardButton("▶️ Mở khoá", callback_data=f"unlock:{name}") if c["locked"]
                 else InlineKeyboardButton("⏸ Khoá", callback_data=f"lock:{name}"))
     kb = InlineKeyboardMarkup([
@@ -154,7 +158,11 @@ async def show_client(update, context, name, new_msg=False):
         [lock_btn, InlineKeyboardButton("🗑 Xoá", callback_data=f"del:{name}")],
         [InlineKeyboardButton("📎 Tải config", callback_data=f"conf:{name}"),
          InlineKeyboardButton("📝 Ghi chú", callback_data=f"note:{name}")],
-        [InlineKeyboardButton("🏠 Dashboard", callback_data="home")],
+        [InlineKeyboardButton("🔄 Đo tốc độ", callback_data=f"lvc:{name}")]
+        + ([InlineKeyboardButton("🛰 Router của khách", callback_data=f"rt:r:{rt['id']}")]
+           if (rt := db.router_for_client(name)) else []),
+        [InlineKeyboardButton("📡 Đang kết nối", callback_data="lv:menu"),
+         InlineKeyboardButton("🏠 Dashboard", callback_data="home")],
     ])
     if new_msg:
         await context.bot.send_message(update.effective_chat.id, txt, parse_mode="HTML", reply_markup=kb)
@@ -336,6 +344,13 @@ async def on_cb(update, context):
     try:
         if d.startswith("rt:"):
             await routers_ui.on_cb(update, context, d)
+        elif d.startswith("lv:"):
+            await live_ui.on_cb(update, context, d)
+        elif d.startswith("lvc:"):
+            name = d[4:]
+            await q.edit_message_text(f"⏳ Đang đo {name} trong {live_ui.MEASURE_S} giây…")
+            rates, _ = await asyncio.to_thread(live_ui.traffic.measure, live_ui.MEASURE_S)
+            await show_client(update, context, name, live=rates.get(name, (0.0, 0.0)))
         elif d == "home":
             await show_dashboard(update, context, edit=True)
         elif d == "new":
@@ -461,6 +476,8 @@ def main():
     app.job_queue.run_repeating(job_expiry, interval=1800, first=30)
     app.job_queue.run_repeating(job_node_watch, interval=600, first=120)
     app.job_queue.run_repeating(routers_ui.job_watchdog, interval=300, first=180, data=ADMIN_ID)
+    app.job_queue.run_repeating(live_ui.job_sample, interval=live_ui.traffic.SAMPLE_S, first=10)
+    app.job_queue.run_repeating(live_ui.job_prune, interval=86400, first=3600)
     log.info("bot starting")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 

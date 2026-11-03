@@ -28,6 +28,11 @@ def init():
             pass_enc TEXT, iface TEXT DEFAULT '', client TEXT DEFAULT '',
             last_check INTEGER DEFAULT 0, last_state TEXT DEFAULT 'new', last_hs INTEGER,
             last_err TEXT DEFAULT '', last_reconnect INTEGER DEFAULT 0, created_at INTEGER)""")
+        c.execute("""CREATE TABLE IF NOT EXISTS usage_daily(
+            day TEXT, name TEXT, down INTEGER DEFAULT 0, up INTEGER DEFAULT 0, PRIMARY KEY(day, name))""")
+        c.execute("""CREATE TABLE IF NOT EXISTS ip_history(
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, ts INTEGER, server TEXT)""")
+        c.execute("CREATE INDEX IF NOT EXISTS ip_history_name ON ip_history(name, ts)")
 
 
 # ---------- settings ----------
@@ -236,3 +241,52 @@ def routers_all():
 def router_delete(rid):
     with _conn() as c:
         c.execute("DELETE FROM routers WHERE id=?", (rid,))
+
+
+# ---------- lưu lượng theo ngày + lịch sử IP server (traffic.py) ----------
+def usage_add(rows):
+    """rows: [(day 'YYYY-MM-DD', name, down_bytes, up_bytes)] — cộng dồn."""
+    if not rows:
+        return
+    with _conn() as c:
+        c.executemany("""INSERT INTO usage_daily(day,name,down,up) VALUES(?,?,?,?)
+            ON CONFLICT(day,name) DO UPDATE SET down=down+excluded.down, up=up+excluded.up""", rows)
+
+
+def usage_sum(name, day_from, day_to="9999-12-31"):
+    with _conn() as c:
+        r = c.execute("SELECT COALESCE(SUM(down),0) d, COALESCE(SUM(up),0) u FROM usage_daily "
+                      "WHERE name=? AND day>=? AND day<=?", (name, day_from, day_to)).fetchone()
+        return r["d"], r["u"]
+
+
+def usage_prune(keep_days=400):
+    cut = time.strftime("%Y-%m-%d", time.localtime(time.time() - keep_days * DAY))
+    with _conn() as c:
+        c.execute("DELETE FROM usage_daily WHERE day<?", (cut,))
+        c.execute("DELETE FROM ip_history WHERE ts<?", (int(time.time()) - keep_days * DAY,))
+
+
+def iphist_add(name, server):
+    with _conn() as c:
+        c.execute("INSERT INTO ip_history(name,ts,server) VALUES(?,?,?)", (name, int(time.time()), server))
+
+
+def iphist_last(name):
+    with _conn() as c:
+        r = c.execute("SELECT server FROM ip_history WHERE name=? ORDER BY ts DESC, id DESC LIMIT 1",
+                      (name,)).fetchone()
+        return r["server"] if r else None
+
+
+def iphist(name, n=5):
+    with _conn() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT ts, server FROM ip_history WHERE name=? ORDER BY ts DESC, id DESC LIMIT ?",
+            (name, n)).fetchall()]
+
+
+def router_for_client(name):
+    with _conn() as c:
+        r = c.execute("SELECT * FROM routers WHERE client=? LIMIT 1", (name,)).fetchone()
+        return dict(r) if r else None
