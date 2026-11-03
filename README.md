@@ -40,6 +40,8 @@ Cập nhật: `cd /root/wghcbot && git pull && bash deploy-vps.sh`
 | `AWG_PORT` | cổng AWG (443) |
 | `NODE_NAME` | tên node |
 | `PANEL_URL` | `https://panel.<domain>` — nút Mini App trong bot |
+| `SERVER_IPS` | nhãn IP server, vd `193.233.232.254=eaz2,95.163.176.156=IP cũ` |
+| `RELAY_IPS` | IP VPS relay, vd `1.2.3.4=MSK` — khách đi qua relay hiện nhóm 🔵 |
 
 Giá gói sửa ngay trong **tab Cài** của Mini App (lưu vào DB).
 
@@ -53,6 +55,15 @@ Giá gói sửa ngay trong **tab Cài** của Mini App (lưu vào DB).
 - Doanh thu tháng, biểu đồ; sao lưu về Telegram
 - Mini App: giao diện web đầy đủ, tab Khách/Tạo/Doanh thu/Cài
 - Tự nạp khách tạo trước bot
+
+## 📡 Đang kết nối
+
+- Chia khách online theo **IP server** họ đang vào (đọc `conntrack`) hoặc **relay** (theo IP VPS relay).
+- Tốc độ đo trong 5 giây lúc bấm (tốc độ khách đang dùng, không phải tốc độ tối đa).
+- Top 5 khách dùng nhiều, khách không hoạt động > 3 phút.
+- Thẻ khách: IP + nhà mạng (ASN offline, `asn.db`), IP server, tốc độ TB 30s, biểu đồ 15 phút,
+  lưu lượng hôm nay / tháng, lịch sử đổi IP server. Job nền lấy mẫu mỗi 30s (bảng `usage_daily`, `ip_history`).
+- ↓ = khách tải xuống, ↑ = khách tải lên.
 
 ## Router khách (🛰 trên Dashboard)
 

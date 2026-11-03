@@ -19,11 +19,21 @@ fi
 # mở TCP 443 cho panel (UFW của installer chỉ mở UDP 443)
 command -v ufw >/dev/null && ufw status | grep -q active && ufw allow 443/tcp >/dev/null 2>&1 || true
 
-# môi trường Python
-apt-get install -y -qq python3-venv openssl >/dev/null 2>&1 || true
+# môi trường Python (+ conntrack: biết khách vào IP server nào)
+apt-get install -y -qq python3-venv openssl conntrack >/dev/null 2>&1 || true
 [ -d "$DIR/venv" ] || python3 -m venv "$DIR/venv"
 "$DIR/venv/bin/pip" install -q -U pip
 "$DIR/venv/bin/pip" install -q -r "$APP/requirements.txt"
+
+# dữ liệu nhà mạng (ASN) offline cho thẻ khách — làm mới nếu cũ hơn 30 ngày; lỗi tải thì bỏ qua
+if [ ! -f "$DIR/asn.db" ] || [ -n "$(find "$DIR/asn.db" -mtime +30 2>/dev/null)" ]; then
+  if curl -fsSL --max-time 120 -o /tmp/ip2asn-v4.tsv.gz https://iptoasn.com/data/ip2asn-v4.tsv.gz; then
+    "$DIR/venv/bin/python" "$APP/asn_build.py" /tmp/ip2asn-v4.tsv.gz "$DIR/asn.db" || true
+    rm -f /tmp/ip2asn-v4.tsv.gz
+  else
+    echo "Không tải được ip2asn — thẻ khách sẽ không hiện nhà mạng."
+  fi
+fi
 
 # chứng chỉ tự ký cho panel (Cloudflare proxy sẽ cấp HTTPS thật cho khách; SSL mode = Full)
 if [ ! -f "$DIR/panel.crt" ]; then
