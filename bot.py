@@ -6,6 +6,10 @@ from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                           MessageHandler, filters, ContextTypes)
 import awg, db, routers_ui, live_ui
 
+# giờ hiển thị trong bot theo Moscow (server chạy UTC)
+os.environ["TZ"] = os.environ.get("BOT_TZ", "Europe/Moscow")
+time.tzset()
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("awgbot")
 
