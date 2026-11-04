@@ -1,10 +1,11 @@
 """📡 Đang kết nối: khách vào IP server nào, tốc độ, top dùng nhiều, khách không hoạt động + khối kết nối trong thẻ khách."""
-import asyncio, html, time
+import asyncio, html, re, time
 from telegram import InlineKeyboardButton as B, InlineKeyboardMarkup as KB, LinkPreviewOptions
 import awg, db, traffic
 
 NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 MEASURE_S = 5
+NAMES_PER_GROUP = 25
 GROUP_ICON = {"direct": ["🟢", "🟡", "🟠", "🟣"], "relay": "🔵", "unknown": "⚪"}
 
 
@@ -57,6 +58,26 @@ def _groups(dump, rates, ct):
     return out
 
 
+_TAG = re.compile(r"<[^>]+>")
+
+
+def _vis_len(t):
+    """Độ dài Telegram tính (sau khi bỏ thẻ HTML)."""
+    return len(html.unescape(_TAG.sub("", t)))
+
+
+def _fit(lines, limit=4000):
+    """Ghép theo từng dòng, dừng trước khi vượt giới hạn — không cắt giữa thẻ HTML."""
+    out, n = [], 0
+    for ln in lines:
+        k = _vis_len(ln) + 1
+        if n + k > limit - 20:
+            out.append("<i>… (bấm nút lọc để xem thêm)</i>")
+            break
+        out.append(ln); n += k
+    return "\n".join(out)
+
+
 def _short(route):
     kind, label, sip = route
     if kind == "relay":
@@ -90,6 +111,11 @@ async def show_live(update, context, filt=None):
         mark = " ◀" if filt == k else ""
         lines.append(f"{icon} {title} — {len(names)} khách{mark}\n"
                      f"     ↓ <code>{traffic.mbit(dn)}</code> ↑ <code>{traffic.mbit(up)}</code> Mbit/s")
+        if filt is None:
+            srt = sorted(names, key=lambda n: (-rates.get(n, (0, 0))[0], n))
+            shown = ", ".join(_link(context, n) for n in srt[:NAMES_PER_GROUP])
+            more = f" <i>… +{len(srt) - NAMES_PER_GROUP} (bấm nút lọc)</i>" if len(srt) > NAMES_PER_GROUP else ""
+            lines.append(f"     👥 {shown}{more}")
     if not groups:
         lines.append("<i>Không có khách online.</i>")
     tdn = sum(rates.get(n, (0, 0))[0] for n in online)
@@ -99,17 +125,25 @@ async def show_live(update, context, filt=None):
     routes = {}
     for _pub, (name, ep, _hs, _rx, _tx) in dump.items():
         routes[name] = traffic.route_of(ep, ct)
-    top = sorted(online, key=lambda n: -rates.get(n, (0, 0))[0])
-    busy = [n for n in top if rates.get(n, (0, 0))[0] >= 1e6][:5]
-    lines += ["", "🔝 <b>Đang dùng nhiều nhất</b>"]
+    top = sorted(online, key=lambda n: (-rates.get(n, (0, 0))[0], n))
+    if filt is not None:
+        lines += ["", f"👥 <b>Khách trên IP này</b> — {len(top)}"]
+        for i, n in enumerate(top[:60], 1):
+            dn, up = rates.get(n, (0, 0))
+            lines.append(f"{i}. {_link(context, n)} · ↓<code>{traffic.mbit(dn)}</code> ↑<code>{traffic.mbit(up)}</code>")
+        if len(top) > 60:
+            lines.append(f"<i>… và {len(top) - 60} khách khác</i>")
+    busy = [] if filt is not None else [n for n in top if rates.get(n, (0, 0))[0] >= 1e6][:5]
+    if filt is None:
+        lines += ["", "🔝 <b>Đang dùng nhiều nhất</b>"]
     for i, n in enumerate(busy, 1):
         dn, up = rates.get(n, (0, 0))
         lines.append(f"{i}. {_link(context, n)} · {html.escape(_short(routes.get(n, ('unknown', '?', None))))} · "
                      f"↓<code>{traffic.mbit(dn)}</code> ↑<code>{traffic.mbit(up)}</code>")
     rest = len(online) - len(busy)
-    if not busy:
+    if filt is None and not busy:
         lines.append("<i>Không ai dùng trên 1 Mbit/s.</i>")
-    elif rest > 0:
+    elif filt is None and rest > 0:
         lines.append(f"<i>… {rest} khách khác dưới 1 Mbit/s</i>")
 
     if filt is None:
@@ -139,9 +173,7 @@ async def show_live(update, context, filt=None):
         rows.append(frow)
     rows.append([B("⬅️ Tất cả IP" if filt is not None else "⬅️ Menu",
                    callback_data="lv:menu" if filt is not None else "home")])
-    text = "\n".join(lines)
-    if len(text) > 4000:
-        text = text[:3990] + "\n…"
+    text = _fit(lines)
     await q.edit_message_text(text, parse_mode="HTML", reply_markup=KB(rows), link_preview_options=NO_PREVIEW)
 
 
